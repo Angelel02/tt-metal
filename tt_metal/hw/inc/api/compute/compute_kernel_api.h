@@ -123,7 +123,7 @@ ALWI void sigmoid_tile_init() {
 #ifdef ARCH_QUASAR
     MATH(SFPU_UNARY_INIT(sigmoid));
 #else
-    MATH(SFPU_UNARY_INIT_FN(sigmoid, sfpu::sigmoid_init, (fast_and_approx)));
+    MATH(SFPU_UNARY_INIT_FN(sigmoid, sfpu::sigmoid_init, (fast_and_approx, DST_ACCUM_MODE)));
 #endif
 }
 
@@ -146,6 +146,16 @@ ALWI void sigmoid_tile(uint32_t idst) {
 #ifdef ARCH_QUASAR
     MATH(SFPU_UNARY_CALL(DST_SYNC_MODE, is_fp32_dest_acc_en, calculate_sigmoid, (8 /*ITERATIONS*/), idst, vec_mode));
 #else
+    if constexpr (!is_fp32_dest_acc_en && !fast_and_approx && vec_mode == VectorMode::RC) {
+        MATH(SFPU_UNARY_CALL(
+            DST_SYNC_MODE,
+            is_fp32_dest_acc_en,
+            calculate_sigmoid,
+            (fast_and_approx, is_fp32_dest_acc_en, 32),
+            idst,
+            VectorMode::None));
+        return;
+    }
     MATH(SFPU_UNARY_CALL(
         DST_SYNC_MODE,
         is_fp32_dest_acc_en,
@@ -280,7 +290,7 @@ ALWI void square_tile_init() {
 
 template <bool fast_and_approx = false>
 ALWI void sigmoid_tile_init_pack() {
-    PACK(SFPU_UNARY_INIT_FN(sigmoid, sfpu::sigmoid_init, (fast_and_approx)));
+    PACK(SFPU_UNARY_INIT_FN(sigmoid, sfpu::sigmoid_init, (fast_and_approx, true)));
 }
 
 template <VectorMode vec_mode = VectorMode::RC, bool fast_and_approx = false, bool is_fp32_dest_acc_en = DST_ACCUM_MODE>
@@ -617,6 +627,18 @@ ALWI void power_iterative_tile_init() { MATH(SFPU_UNARY_INIT(power)); }
 // clang-format on
 template <bool is_fp32_dest_acc_en = DST_ACCUM_MODE>
 ALWI void exp2_tile(uint32_t idst) {
+#ifndef ARCH_QUASAR
+    if constexpr (!is_fp32_dest_acc_en) {
+        MATH(SFPU_UNARY_CALL(
+            DST_SYNC_MODE,
+            is_fp32_dest_acc_en,
+            calculate_exp2,
+            (true /* APPROXIMATE */, is_fp32_dest_acc_en, 32),
+            idst,
+            VectorMode::None));
+        return;
+    }
+#endif
     MATH(SFPU_UNARY_CALL(
         DST_SYNC_MODE,
         is_fp32_dest_acc_en,
